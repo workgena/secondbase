@@ -7,7 +7,7 @@ namespace :db do
       end
     end
 
-    task :create => ['db:load_config'] do
+    task :create => [:environment, 'db:load_config'] do
       SecondBase.on_base { Rake::Task['db:create'].execute }
     end
 
@@ -27,55 +27,55 @@ namespace :db do
       SecondBase.on_base { Rake::Task['db:purge'].execute }
     end
 
-    task :migrate => ['db:load_config'] do
+    task :migrate => [:environment, 'db:load_config'] do
       SecondBase.on_base { Rake::Task['db:migrate'].execute }
     end
 
     namespace :migrate do
 
-      task :redo => ['db:load_config'] do
+      task :redo => [:environment, 'db:load_config'] do
         SecondBase.on_base { Rake::Task['db:migrate:redo'].execute }
       end
 
-      task :up => ['db:load_config'] do
+      task :up => [:environment, 'db:load_config'] do
         SecondBase.on_base { Rake::Task['db:migrate:up'].execute }
       end
 
-      task :down => ['db:load_config'] do
+      task :down => [:environment, 'db:load_config'] do
         SecondBase.on_base { Rake::Task['db:migrate:down'].execute }
       end
 
-      task :status => ['db:load_config'] do
+      task :status => [:environment, 'db:load_config'] do
         SecondBase.on_base { Rake::Task['db:migrate:status'].execute }
       end
 
     end
 
-    task :rollback => ['db:load_config'] do
+    task :rollback => [:environment, 'db:load_config'] do
       SecondBase.on_base { Rake::Task['db:rollback'].execute }
     end
 
-    task :forward => ['db:load_config'] do
+    task :forward => [:environment, 'db:load_config'] do
       SecondBase.on_base { Rake::Task['db:forward'].execute }
     end
 
-    task :abort_if_pending_migrations do
+    task :abort_if_pending_migrations => [:environment, 'db:load_config'] do
       SecondBase.on_base { Rake::Task['db:abort_if_pending_migrations'].execute }
     end
 
-    task :version => ['db:load_config'] do
+    task :version => [:environment, 'db:load_config'] do
       SecondBase.on_base { Rake::Task['db:version'].execute }
     end
 
     namespace :schema do
 
-      task :load => ['db:load_config'] do
+      task :load => [:environment, 'db:load_config', :check_protected_environments] do
         SecondBase.on_base { Rake::Task['db:schema:load'].execute }
       end
 
       namespace :cache do
 
-        task :dump => ['db:load_config'] do
+        task :dump => [:environment, 'db:load_config'] do
           SecondBase.on_base { Rake::Task['db:schema:cache:dump'].execute }
         end
 
@@ -85,7 +85,11 @@ namespace :db do
 
     namespace :structure do
 
-      task :load => ['db:load_config'] do
+      task :dump => [:environment, 'db:load_config'] do
+        SecondBase.on_base { Rake::Task['db:structure:dump'].execute }
+      end
+
+      task :load => [:environment, 'db:load_config'] do
         SecondBase.on_base { Rake::Task['db:structure:load'].execute }
       end
 
@@ -117,12 +121,21 @@ end
 %w{
   create:all create drop:all purge:all purge
   migrate migrate:status abort_if_pending_migrations
-  schema:load schema:cache:dump structure:load
+  schema:load schema:cache:dump structure:dump structure:load
   test:purge test:load_schema test:load_structure test:prepare
 }.each do |name|
   task = Rake::Task["db:#{name}"] rescue nil
   next unless task && SecondBase::Railtie.run_with_db_tasks?
   task.enhance do
+
+    if name.in? ['create',
+      'migrate', 'migrate:status', 'abort_if_pending_migrations',
+      'schema:load', 'schema:cache:dump',
+      'structure:dump', 'structure:load']
+
+      Rake::Task["environment"].invoke
+    end
+
     Rake::Task["db:load_config"].invoke
     Rake::Task["db:second_base:#{name}"].invoke
   end
